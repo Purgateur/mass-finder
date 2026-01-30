@@ -1,53 +1,91 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Finding Mass Times...</title>
+    <title>Recherche Messes...</title>
     <style>
         body {
             font-family: sans-serif;
             text-align: center;
-            padding: 50px;
+            padding: 20px;
             background-color: #f4f4f4;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
         }
-        .message {
-            font-size: 1.2em;
-            color: #333;
+        .loader {
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #3498db;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin-bottom: 20px;
         }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        p { color: #333; font-size: 1.1em; }
     </style>
 </head>
 <body>
 
-    <div class="message">
-        <p>📍 Locating you to find the nearest mass times...</p>
-        <p>Please click <strong>"Allow"</strong> if asked for location permission.</p>
-    </div>
+    <div class="loader"></div>
+    <p id="status">Localisation en cours...<br>Veuillez autoriser l'accès GPS.</p>
 
     <script>
-        function redirectToMesses(position) {
-            var lat = position.coords.latitude;
-            var lon = position.coords.longitude;
+        const statusText = document.getElementById('status');
+
+        function success(position) {
+            const lat = position.coords.latitude;
+            const lon = position.coords.longitude;
             
-            // Messes.info accepts coordinates in the URL directly
-            // Format: https://messes.info/horaires/LAT:LON
-            var targetUrl = "https://messes.info/horaires/" + lat + ":" + lon;
-            
-            window.location.href = targetUrl;
+            statusText.innerHTML = "Position trouvée.<br>Recherche de la ville...";
+
+            // On utilise l'API gratuite OpenStreetMap pour trouver le nom de la ville
+            fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`)
+                .then(response => response.json())
+                .then(data => {
+                    
+                    // On récupère la ville (parfois classé comme city, town, ou village selon la taille)
+                    let ville = data.address.city || data.address.town || data.address.village || data.address.municipality || "";
+                    let codePostal = data.address.postcode || "";
+
+                    // Si on a trouvé la ville, on construit l'URL textuelle
+                    if (ville) {
+                        // Exemple résultat: "Torcy 77200 toutecelebration"
+                        let recherche = `${ville} ${codePostal} toutecelebration`;
+                        
+                        // On encode pour que l'URL soit valide (les espaces deviennent %20)
+                        let urlFinale = "https://messes.info/horaires/" + encodeURIComponent(recherche);
+                        
+                        window.location.href = urlFinale;
+                    } else {
+                        // Si l'API ne trouve pas le nom, on utilise les coordonnées en secours
+                        window.location.href = "https://messes.info/horaires/" + lat + ":" + lon;
+                    }
+                })
+                .catch(err => {
+                    // En cas d'erreur de réseau avec l'API OpenStreetMap
+                    console.error(err);
+                    window.location.href = "https://messes.info/horaires/" + lat + ":" + lon;
+                });
         }
 
-        function handleError(error) {
-            // If location is denied or fails, fallback to the homepage
-            alert("Could not get location. Redirecting to the main search page.");
-            window.location.href = "https://messes.info/";
+        function error() {
+            statusText.innerText = "Impossible de vous localiser. Redirection vers l'accueil.";
+            setTimeout(() => { window.location.href = "https://messes.info/"; }, 2000);
         }
 
-        // Run the geolocation check immediately
         if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(redirectToMesses, handleError);
+            navigator.geolocation.getCurrentPosition(success, error);
         } else {
-            alert("Geolocation is not supported by this browser.");
-            window.location.href = "https://messes.info/";
+            statusText.innerText = "GPS non supporté.";
         }
     </script>
 
